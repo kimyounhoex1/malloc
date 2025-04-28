@@ -75,7 +75,7 @@ team_t team = {
 
 // next block and previous block block address
 #define NEXT_BLKP(bp)   ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
-#define prev_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
+#define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 static char* heap_listp;
 /**/
@@ -101,7 +101,12 @@ static void *extend_heap(size_t words){
     char *bp;
     size_t size;
 
-    size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
+    // size = (words % 2) ? (words+1) * WSIZE : words * WSIZE;
+    if(words % 2 == 0)
+        size = words * WSIZE;
+    else 
+        size = (words + 1) * WSIZE;
+    
     if((long)(bp = mem_sbrk(size)) == -1)
         return NULL;
     
@@ -110,6 +115,18 @@ static void *extend_heap(size_t words){
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
 
     return coalesce(bp);
+}
+
+/*
+ * mm_free - Freeing a block does nothing.
+ */
+void mm_free(void *bp)
+{
+    size_t size = GET_SIZE(HDRP(bp));
+
+    PUT(HDRP(bp), PACK(size, 0));
+    PUT(FTRP(bp), PACK(size, 0));
+    coalesce(bp);
 }
 
 static void *coalesce(void *bp){
@@ -124,18 +141,29 @@ static void *coalesce(void *bp){
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+        // size_t new_packing = PACK(GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(bp)), 0);
+        // PUT(HDRP(bp), new_packing);
+        // PUT(FTRP(NEXT_BLKP(bp)), new_packing);
     }
     else if(!prev_alloc && next_alloc){
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
+        // size_t new_packing = PACK(GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(bp)), 0);
+        // PUT(HDRP(PREV_BLKP(bp)), new_packing);
+        // PUT(FTRP(bp), new_packing);
+        // bp = PREV_BLKP(bp);
     }
     else{
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-        PUT(HDRP(NEXT_BLKP(bp)), PACK(size, 0));
+        PUT(FPRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
+        // size_t new_packing = PACK(GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp))), 0);
+        // PUT(HDRP(PREV_BLKP(bp)), new_packing);
+        // PUT(FTRP(NEXT_BLKP(bp)), new_packing);
+        // bp = PREV_BLKP(bp);
     }
 
     return bp;
@@ -147,27 +175,45 @@ static void *coalesce(void *bp){
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
+    // int newsize = ALIGN(size + SIZE_T_SIZE);
+    // void *p = mem_sbrk(newsize);
+    // if (p == (void *)-1)
+    //     return NULL;
+    // else
+    // {
+    //     *(size_t *)p = size;
+    //     return (void *)((char *)p + SIZE_T_SIZE);
+    // }
+    size_t asize;
+    size_t extendsize;
+    char *bp;
+
+    if(size == 0)
         return NULL;
+
+    if(size <= DSIZE)
+        asize = 2*DSIZE;
     else
-    {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+        asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1))/ DSIZE);
+    
+    if((bp = find_fit(asize)) != NULL){
+        place(bp, asize);
+        return bp;
     }
+
+    extendsize = MAX(asize, CHUNKSIZE);
+    if((bp = extend_heap(extendsize/WSIZE)) == NULL)
+        return NULL;
+    place(bp, asize);
+    return bp;
 }
 
-/*
- * mm_free - Freeing a block does nothing.
- */
-void mm_free(void *ptr)
-{
-    size_t size = GET_SIZE(HDRP(bp));
+static void *find_fit(size_t asize){
 
-    PUT(HDRP(bp), PACK(size, 0));
-    PUT(FTRP(bp), PACK(size, 0));
-    coalesce(bp);
+}
+
+static void place(void *bp, size_t asize){
+
 }
 
 /*
