@@ -355,6 +355,7 @@
 // //     size_t copySize;
 
 // //     newptr = mm_malloc(size);
+
 // //     if (newptr == NULL)
 // //         return NULL;
 // //     copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
@@ -364,3 +365,17 @@
 // //     mm_free(oldptr);
 // //     return newptr;
 // // }
+
+
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct A{
+    int a;
+    char b;
+}A;
+
+int main(){
+    A a;
+    printf("%lu", sizeof(A));
+}

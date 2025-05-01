@@ -63,20 +63,45 @@ team_t team = {
 #define PREV_BLKP(bp)   ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 #define PRED(bp)        ((char *)(bp))
-#define SUCC(bp)        ((char *)(bp)+WSIZE)
+#define SUCC(bp)        (*(char **)(bp)+WSIZE)
 
+static char* next_point_bp;
 static char* heap_listp;
 /* LIFO 방식으로써 
 */
-static char* first_free;
-static char* last_free;
+// static char* first_free;
+// static char* last_free;
 
-static void add_fake_free_block(void* bp){
-    PUT(bp + (1*WSIZE), PACK(2*DSIZE, 0));
-    PUT(bp + (2*WSIZE), 0); // 이전 가용 블록
-    PUT(bp + (3*WSIZE), 0); // 다음 가용 블록
-    PUT(bp + (4*WSIZE), PACK(2*DSIZE, 0));
-}
+// static void add_fake_free_block(void* bp){
+
+//     PUT(bp + (1*WSIZE), PACK(2*DSIZE, 0));
+//     PUT(bp + (2*WSIZE), 0); // 이전 가용 블록
+//     PUT(bp + (3*WSIZE), 0); // 다음 가용 블록
+//     PUT(bp + (4*WSIZE), PACK(2*DSIZE, 0));
+// }
+
+// void new_free_block(void *bp){
+//     // head가 null일때랑 아닐때 분기 나누기
+//     // PUT(SUCC(bp), 0);
+//     // PUT(PRED(bp), PRED(first_free));
+//     // PUT(PRED(first_free), bp);
+//     // PUT(SUCC(PRED(bp)), bp);
+//     PUT(SUCC(bp), first_free);
+//     PUT(PRED(bp), 0);
+//     PUT(PRED(first_free), bp);
+//     first_free = bp;
+// }
+
+// void remove_free_block(void *bp){
+//     if(bp == first_free){
+//         first_free = SUCC(bp);
+//         PUT(PRED(first_free),0);
+//     }
+//     else{
+//         PUT(SUCC(PRED(bp)), SUCC(bp));
+//         PUT(PRED(SUCC(bp)), PRED(bp));
+//     }
+// }
 
 /**/
 /*
@@ -86,7 +111,8 @@ static void add_fake_free_block(void* bp){
 
 int mm_init(void)
 {
-    if((heap_listp = mem_sbrk(7*WSIZE)) == (void *)-1)
+    if((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
+    // if((heap_listp = mem_sbrk(7*WSIZE)) == (void *)-1)
         return -1;
     PUT(heap_listp, 0);
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1));
@@ -95,14 +121,17 @@ int mm_init(void)
     // PUT(heap_listp + (4*WSIZE), 0); // 이전 가용 블록
     // PUT(heap_listp + (5*WSIZE), 0); // 다음 가용 블록
     // PUT(heap_listp + (6*WSIZE), PACK(2*DSIZE, 0));
-    add_fake_free_block(heap_listp + (2*WSIZE));
+    // add_fake_free_block(heap_listp + (2*WSIZE));
     PUT(heap_listp + (7*WSIZE), PACK(0, 1)); 
     heap_listp += (2*WSIZE);
-    first_free = heap_listp + (2*WSIZE);
+    // next_point_bp = 
+    // first_free = heap_listp + (2*WSIZE);
     if(extend_heap(CHUNKSIZE/WSIZE) == NULL)
         return -1;
     return 0;
 }
+
+
 
 /*
  * mm_free - Freeing a block does nothing.
@@ -126,14 +155,14 @@ static void *extend_heap(size_t words){
     if((long)(bp = mem_sbrk(size)) == -1)
         return NULL;
 
-    PUT(HDRP(bp), PACK(size, 0));    
+    PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
 
-    if((long)(bp = mem_sbrk(4*WSIZE)) == -1)
-        return NULL;
+    // if((long)(bp = mem_sbrk(4*WSIZE)) == -1)
+    //     return NULL;
         // 종료를 위한 fake_free_block 생성
     
-    add_fake_free_block(bp);
+    // add_fake_free_block(bp);
     
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
     
@@ -157,22 +186,27 @@ static void *coalesce(void *bp){
         return bp;
     }
     else if(prev_alloc && !next_alloc){
+        // remove_free_block(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
     }
     else if(!prev_alloc && next_alloc){
+        // remove_free_block(PREV_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
     else{
+        // remove_free_block(PREV_BLKP(bp));
+        // remove_free_block(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
+    // new_free_block(bp);
 
     return bp;
 }
@@ -183,6 +217,17 @@ static void *coalesce(void *bp){
  *     Always allocate a block whose size is a multiple of the alignment.
  */
 
+
+//  void *next_fit(size_t asize, void *bp){
+//     if(GET_SIZE(HDRP(bp)) == 0){
+//         // return next_fit(asize, next_point_bp, bp);
+//         return NULL;
+//     }
+//     if (!GET_ALLOC(HDRP(bp)) && (GET_SIZE(HDRP(bp)) >= asize))
+//         return bp;
+//     return first_fit(asize, NEXT_BLKP(bp));
+//  } 
+
  void *first_fit(size_t asize, void *bp){
     if(GET_SIZE(HDRP(bp)) == 0){
         return NULL;
@@ -192,9 +237,6 @@ static void *coalesce(void *bp){
     return first_fit(asize, NEXT_BLKP(bp));
  }
 
- void *next_fit(){
-
- }
 
  static void *find_fit(size_t asize)
  {
@@ -206,13 +248,19 @@ static void *coalesce(void *bp){
     
     size_t csize = GET_SIZE(HDRP(bp));
     if ((csize-asize) >= (2*DSIZE)){
+        // remove_free_block(bp);
         PUT(HDRP(bp), PACK(asize,1));
         PUT(FTRP(bp), PACK(asize,1));
+        // void * next_bp = NEXT_BLKP(bp);
         bp = NEXT_BLKP(bp);
+        // PUT(HDRP(next_bp), PACK(csize-asize,0));
+        // PUT(FTRP(next_bp), PACK(csize-asize,0));
         PUT(HDRP(bp), PACK(csize-asize,0));
         PUT(FTRP(bp), PACK(csize-asize,0));
+        // new_free_block(next_bp);
     }
     else{
+        // remove_free_block(bp);
         PUT(HDRP(bp), PACK(csize,1));
         PUT(FTRP(bp), PACK(csize,1));
     }
